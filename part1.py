@@ -18,7 +18,7 @@ from sklearn.metrics import mean_squared_error
 
 
 # Image properties
-SIZE = 8  # 28 # Image width
+SIZE = 28 # Image width
 NB_PX_IMG = SIZE ** 2
 
 # quantum parameters
@@ -44,6 +44,31 @@ def get_proba(counts: dict) -> dict:
     sums = sum(map(lambda x: x[1], counts.items()))
     return {key: value / sums for key, value in counts.items()}
 
+def group_pixels_by_intensity(image: np.ndarray) -> dict:
+    image = image.flatten()
+    groups = {}
+    for i in range(len(image)):
+        intensity = image[i]
+        if intensity not in groups:
+            groups[intensity] = []
+        groups[intensity].append(bin(i))
+    return groups
+
+
+def minimize_expression(expressions: list) -> str:
+    """
+    Minimize the boolean expression in the list
+    For example:
+    [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000] -> 0b000111
+    """
+    return expressions[0]
+
+
+def process_image(image: np.ndarray) -> list:
+    intensity_to_pixels = group_pixels_by_intensity(image)
+    intensity_count_expression = []
+    for intensity, pixels in intensity_to_pixels.items():
+        intensity_count_expression.append([intensity, len(pixels), minimize_expression(pixels)])
 
 def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
     circuit = qiskit.QuantumCircuit(NB_QUBITS)
@@ -60,6 +85,12 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
 
     ry_qbits = list(range(NB_QUBITS))
 
+    # Switch is no longer relevant written this way: instead, we should apply the X gates according to
+    # the result of process_image (see above)
+    # intensity_count_expression = process_image(image)
+    # switches = [ice[2][i] ^ ice[2][i-1] for i in range(intensity_count_expression)]
+    # This also means that an optimisation has to be done to minimise the number of X gates applied 
+    # (XOR yielding minimal number of 1s)
     switches = [bin(0)[2:].zfill(NB_QUBITS)] + [
         bin(i ^ (i - 1))[2:].zfill(NB_QUBITS) for i in range(1, NB_PX)
     ]
@@ -73,8 +104,10 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
         for j in range(NB_QUBITS):
             if switch[j] == "1":
                 circuit.x(j - 1)
-        # TODO: Is this a 2-qubit gate?? -> If not we have to reformulate using 2-qubit gates only (RYGate + CNOT)
-        # TODO: This method may be too slow: as such we have to compress the image by grouping pixels of the same intensity together
+        # TODO: Not a 2-qubit gate: reformulate using 2-qubit gates only (RYGate + CNOT)
+        # Instead of 2 * theta, rotation is 2 * count * theta
+        # where count is stored in intensity_count_expression[1]
+        # where theta is result of pixel_value_to_theta(intensity_count_expression[0])
         c3ry = RYGate(2 * theta).control(NB_QUBITS - 1)
         circuit.append(c3ry, ry_qbits)
 
@@ -166,31 +199,38 @@ if __name__ == "__main__":
     # plt.imshow(image, cmap='gray')
     # plt.show()
 
-    # print(image)
+    plt.imshow(image, cmap='gray')
+    plt.show()
+
+    print(image)
+
+    print(group_pixels_by_intensity(image))
+    test = [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000]
+    print(minimize_expression(test))
 
     #image = np.array([0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 120])
     # image = np.array([128]*16)
     #image = image[:NB_PX]
-    print(image)
+    # print(image)
 
-    circuit = encode(image)
-    print(count_gates(circuit))
+    # circuit = encode(image)
+    # print(count_gates(circuit))
 
-    # Simulate the circuit
-    aer_sim = Aer.get_backend("aer_simulator")
-    t_qc = transpile(circuit, aer_sim)
-    qobj = assemble(t_qc, shots=16384)
+    # # Simulate the circuit
+    # aer_sim = Aer.get_backend("aer_simulator")
+    # t_qc = transpile(circuit, aer_sim)
+    # qobj = assemble(t_qc, shots=16384)
 
-    result = aer_sim.run(qobj).result()
-    counts = result.get_counts(circuit)
-    print(counts)
-    print(len(counts))
+    # result = aer_sim.run(qobj).result()
+    # counts = result.get_counts(circuit)
+    # print(counts)
+    # print(len(counts))
 
-    # Decode the histogram
-    img = decode(get_proba(counts))
-    img = img.flatten()
-    print(img.flatten())
-    print(img[:28*(len(img) // 28)].reshape(len(img) // 28, 28))
-    print(img)
+    # # Decode the histogram
+    # img = decode(get_proba(counts))
+    # img = img.flatten()
+    # print(img.flatten())
+    # print(img[:28*(len(img) // 28)].reshape(len(img) // 28, 28))
+    # print(img)
     # plt.hist(img.flatten())
     # plt.show()
