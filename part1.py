@@ -44,6 +44,7 @@ def get_proba(counts: dict) -> dict:
     sums = sum(map(lambda x: x[1], counts.items()))
     return {key: value / sums for key, value in counts.items()}
 
+
 def group_pixels_by_intensity(image: np.ndarray) -> dict:
     image = image.flatten()
     groups = {}
@@ -51,7 +52,7 @@ def group_pixels_by_intensity(image: np.ndarray) -> dict:
         intensity = image[i]
         if intensity not in groups:
             groups[intensity] = []
-        groups[intensity].append(bin(i))
+        groups[intensity].append(bin(i)) #.zfill(~) to pad with 0s TODO
     return groups
 
 
@@ -59,7 +60,7 @@ def minimize_expression(expressions: list) -> str:
     """
     Minimize the boolean expression in the list
     For example:
-    [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000] -> 0b000111
+    ['0b000000', '0b010000', '0b010000', '0b011000', '0b100000', '0b101000', '0b110000', '0b111000'] -> 0b000111
     """
     return expressions[0]
 
@@ -97,7 +98,7 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
 
     # Apply the rotation gates
     for i in range(NB_PX):
-        theta = thetas[i]
+        theta = thetas[i] # pixel_value_to_theta(intensity_count_expression[i][0])
 
         switch = switches[i]
         # Apply x gate to the i-th qubit if the i-th bit of the switch is 1
@@ -108,7 +109,8 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
         # Instead of 2 * theta, rotation is 2 * count * theta
         # where count is stored in intensity_count_expression[1]
         # where theta is result of pixel_value_to_theta(intensity_count_expression[0])
-        c3ry = RYGate(2 * theta).control(NB_QUBITS - 1)
+        c3ry = RYGate(2 * theta).control(NB_QUBITS - 1) # intensity_count_expression[i][1] * 2 * theta
+        # {m_0, ..., m_i} ==> {R_{m_0}, ..., R_{m_i}} -> R_{m_0}*i+1 
         circuit.append(c3ry, ry_qbits)
 
         circuit.barrier()
@@ -204,7 +206,9 @@ if __name__ == "__main__":
 
     print(image)
 
-    print(group_pixels_by_intensity(image))
+    intensity_to_pixels = group_pixels_by_intensity(image)
+    print(intensity_to_pixels)
+    print(len(intensity_to_pixels))
     test = [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000]
     print(minimize_expression(test))
 
