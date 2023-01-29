@@ -59,6 +59,7 @@ def group_pixels_by_intensity(image: np.ndarray) -> dict:
         groups[intensity].append("0b" + bin(i)[2:].zfill(NBITS_PX_IDX))
     return groups
 
+
 def minimize_expression(expressions: list) -> str:
     """
     Minimize the boolean expression in the list
@@ -84,16 +85,15 @@ def minimize_expression(expressions: list) -> str:
     simplified_problem = str(sy.to_dnf(problem, simplify=True, force=True))
     print("Simplified problem: ", simplified_problem)
 
-    # convert the simplified problem to a list of binary values
+    # convert the simplified problem to a list of binary values (PSB unclear to me)
     simplified_expressions = []
     for expr in simplified_problem.split("|"):
         vars = expr.replace(" ", "").replace('(', '').replace(')', '').split("&")
-        print(vars)
+        # print(vars)
         b_val = "".ljust(NBITS_PX_IDX, '-') # - or 2 means everything/do not care/ 1 or 0
         for var in vars:
             var = var.replace(" ", "")
-            print(var)
-            #input()
+            # print(var)
             if var[0] != "~":
                 idx = int(var[2:])
                 b_val = b_val[:idx] + "1" + b_val[idx+1:]
@@ -105,6 +105,7 @@ def minimize_expression(expressions: list) -> str:
     #input()
     return simplified_expressions
     #return expressions
+
 
 def process_image(image: np.ndarray) -> list:
     rounded_image = np.around(image, decimals=-1)
@@ -126,6 +127,7 @@ def process_image(image: np.ndarray) -> list:
     # TODO sort to avoid too many switchs ?
     print(intensity_count_expression)
     return intensity_count_expression
+
 
 def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
     circuit = qiskit.QuantumCircuit(NB_QUBITS)
@@ -327,6 +329,9 @@ def simulator(circuit: qiskit.QuantumCircuit) -> dict:
     aer_sim = Aer.get_backend("aer_simulator")
     t_qc = transpile(circuit, aer_sim)
     qobj = assemble(t_qc, shots=16384)
+    
+    # Transpile creates a new circuit
+    print(t_qc)
 
     result = aer_sim.run(qobj).result()
     return result.get_counts(circuit)
@@ -339,14 +344,17 @@ def run_part1(image: np.ndarray) -> Union[qiskit.QuantumCircuit, np.ndarray]:
     img = decode(counts)
     return circuit, img
 
+
 def count_gates(circuit: qiskit.QuantumCircuit) -> Dict[int, int]:
     """Returns the number of gate operations with each number of qubits."""
     return Counter([len(gate[1]) for gate in circuit.data])
+
 
 def image_mse(image1,image2):
     # Using sklearns mean squared error:
     # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_error.html
     return mean_squared_error(image1, image2)
+
 
 def grading(dataset):
     n=len(dataset)
@@ -367,6 +375,7 @@ def grading(dataset):
 
     # Score for Part 1
     return f * (0.999 ** gatecount)
+
 
 def build_image(repr_strs):
     """
@@ -393,10 +402,17 @@ def build_image(repr_strs):
                 img_r[i,j] = img_r[i,j] or tmp
     print(img_r)
 
+
 def get_circuit():
     pass
 
+
 if __name__ == "__main__":
+    t = ['0b000000', '0b001000', '0b010000', '0b011000', '0b100000', '0b101000', '0b110000', '0b111000']
+    # t = ['0b000', '0b001']
+    expr = minimize_expression(t)
+    print(expr)
+
     # build_image(["222000"])
     # print("=====================================")    
     # build_image(["222221", "222212", '222122'])
@@ -422,16 +438,16 @@ if __name__ == "__main__":
 
     # # TESTS
     # example gray scale image 3x3
-    image = np.array(
-        [[0, 250, 0],
-         [125, 125, 125],
-         [250, 0, 250]]
-    )
-    image = np.array(
-        [[125, 125, 0],
-         [125, 125, 125],
-         [250, 0, 250]]
-    )
+    # image = np.array(
+    #     [[0, 250, 0],
+    #      [125, 125, 125],
+    #      [250, 0, 250]]
+    # )
+    # image = np.array(
+    #     [[125, 125, 0],
+    #      [125, 125, 125],
+    #      [250, 0, 250]]
+    # )
 
     ### 2 TESTS
     # image = np.array(
@@ -466,23 +482,23 @@ if __name__ == "__main__":
     #     [[255, 0],
     #     [0, 255]]
     # )
-    print(image)
+    # print(image)
     #print(run_part1(image)[1])
 
-    intensity_to_pixels = group_pixels_by_intensity(image)
-    print(intensity_to_pixels)
-    print(len(intensity_to_pixels))
+    # intensity_to_pixels = group_pixels_by_intensity(image)
+    # print(intensity_to_pixels)
+    # print(len(intensity_to_pixels))
     #test = [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000]
 
-    image = np.ones((SIZE, SIZE))* 120
-    image[:, 0] = 255
-    print(image)
-    ice = process_image(image)
-    print(ice)
+    # image = np.ones((SIZE, SIZE))* 120
+    # image[:, 0] = 255
+    # print(image)
+    # ice = process_image(image)
+    # print(ice)
     # circuit from the paper to test
     # ice = [[120.0, 56, '222210'], [120.0, 56, '222102'], [260.0, 8, '222000'], [120.0, 56, '222221']]
-    circuit = encode_compress(image, ice)
-    print(decode(simulator(circuit)))
+    # circuit = encode_compress(image, ice)
+    # print(decode(simulator(circuit)))
     # print(minimize_expression(intensity_to_pixels[0.])) # True
     # print(minimize_expression(intensity_to_pixels[55.])) # Not a single expression
 
