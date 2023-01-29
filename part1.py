@@ -79,14 +79,27 @@ def minimize_expression(expressions: list) -> str:
         problem += translate(expression) + "|"
     problem = problem[:-1]
     print(problem)
-    simplified_problem = sy.to_dnf(problem, simplify=True, force=True)
+    simplified_problem = str(sy.to_dnf(problem, simplify=True, force=True))
     print("Simplified problem: ", simplified_problem)
-    return simplified_problem
+    simplified_expressions = []
+    for expr in simplified_problem.split("|"):
+        vars = expr.split("&")[1:-1]
+        b_val = "".zfill(NBITS_PX_IDX)
+        for var in vars:
+            var = var.replace(" ", "")
+            if var[0] != "~":
+                idx = int(var[2:])
+                b_val = b_val[:idx] + "1" + b_val[idx+1:]
+        simplified_expressions.append(b_val)
+    print(simplified_expressions)
+    return simplified_expressions
     #return expressions
 
 
 def process_image(image: np.ndarray) -> list:
-    intensity_to_pixels = group_pixels_by_intensity(image)
+    rounded_image = np.around(image, decimals=-1)
+    intensity_to_pixels = group_pixels_by_intensity(rounded_image)
+    print(len(intensity_to_pixels))
     intensity_count_expression = []
     for intensity, pixels in intensity_to_pixels.items():
         print(intensity)
