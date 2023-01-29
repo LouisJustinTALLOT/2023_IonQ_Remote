@@ -19,7 +19,7 @@ from sklearn.metrics import mean_squared_error
 
 
 # Image properties
-SIZE = 3#3#28 # Image width
+SIZE = 8#3#3#28 # Image width
 NB_PX_IMG = SIZE ** 2
 
 # quantum parameters
@@ -114,9 +114,12 @@ def process_image(image: np.ndarray) -> list:
     for intensity, pixels in intensity_to_pixels.items():
         print(intensity)
         exprs = minimize_expression(pixels)
+        tmp_exprs = []
         for expr in exprs:
-            intensity_count_expression.append([intensity, len(pixels), expr.replace('-', '2')])
-    intensity_count_expression = sorted(intensity_count_expression, key=lambda x: x[2])
+            tmp_exprs.append([intensity, len(pixels), expr.replace('-', '2')])
+        #tmp_exprs = sorted(tmp_exprs, key=lambda x: x[2])
+        intensity_count_expression.extend(tmp_exprs)
+    #intensity_count_expression = sorted(intensity_count_expression, key=lambda x: x[2])
     print("order", list(map(lambda x: x[2], intensity_count_expression)))
     # intensity_count_expression = sorted(intensity_count_expression, key=compare)
     # TODO sort to avoid too many switchs
@@ -212,10 +215,10 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
             # {m_0, ..., m_i} ==> {R_{m_0}, ..., R_{m_i}} -> R_{m_0}*i+1 
             circuit.append(c3ry, ry_qbits)
 
-        circuit.barrier()
-        
-        print(circuit)
-        input()
+            circuit.barrier()
+            
+            print(circuit)
+            input()
 
     for j in range(NB_QUBITS - 1):
         if prev_switch[j] != "1":
@@ -253,7 +256,15 @@ def encode_compress(image: np.ndarray, intensity_count_expression) -> qiskit.Qua
     #print(switches)
     #input()
 
+    # prev_expr = "1" * (NB_QUBITS - 1)
+    # for j in range(NB_QUBITS - 1):
+    #     circuit.x(j)
     prev_expr = "0" * (NB_QUBITS - 1)
+    #prev_expr = "111111"
+    # for j in range(3,6):
+    #     circuit.x(j)
+
+
     for i, (px_intensity, count, bin_expr) in enumerate(ice):
         if int(px_intensity) != 0:
             theta = pixel_value_to_theta(px_intensity)
@@ -269,12 +280,21 @@ def encode_compress(image: np.ndarray, intensity_count_expression) -> qiskit.Qua
             ctrl_count = len(bin_expr) - bin_expr.count("2")
             qbits = [j for j in range(NB_QUBITS - 1) if bin_expr[j] != "2"] + [NB_QUBITS - 1]
 
-            c3ry = RYGate(2 * theta * (2**bin_expr.count('2'))).control(ctrl_count) # intensity_count_expression[i][1] * 2 * theta
+            # c3ry = RYGate(2 * theta * (2**bin_expr.count('2'))).control(ctrl_count) # intensity_count_expression[i][1] * 2 * theta
             # {m_0, ..., m_i} ==> {R_{m_0}, ..., R_{m_i}} -> R_{m_0}*i+1 
+            c3ry = RYGate(2 * theta).control(ctrl_count) # intensity_count_expression[i][1] * 2 * theta
+
             circuit.append(c3ry, qbits)
             print(circuit)
 
-            prev_expr = bin_expr
+            #prev_expr = bin_expr
+            new_prev_expr = ""
+            for j in range(NB_QUBITS - 1):
+                if bin_expr[j] == "2":
+                    new_prev_expr += prev_expr[j]
+                else:
+                    new_prev_expr += bin_expr[j]
+            prev_expr = new_prev_expr
 
             circuit.barrier()
 
@@ -382,7 +402,45 @@ def grading(dataset):
     # Score for Part 1
     return f * (0.999 ** gatecount)
 
+def build_image(repr_strs):
+    img = np.zeros((SIZE,SIZE))
+    for i in range(SIZE):
+        for j in range(SIZE):
+            img[i,j] = int(i*SIZE+j)
+    #print(img)
+    img_r = np.zeros((SIZE,SIZE))
+    for i in range(SIZE):
+        for j in range(SIZE):
+            idx = img[i, j]
+            bin_idx = np.binary_repr(int(idx), width=NB_QUBITS - 1)
+
+            img_r[i,j] = False
+            for repr_str in repr_strs:
+                tmp = True
+                for k in range(len(bin_idx)):
+                    if repr_str[k] != "2" and bin_idx[k] != repr_str[k]:
+                        tmp = False
+                        break
+                img_r[i,j] = img_r[i,j] or tmp
+    print(img_r)
+
+def get_circuit():
+    pass
+
 if __name__ == "__main__":
+    # build_image(["222000"])
+    # print("=====================================")    
+    # build_image(["222221", "222212", '222122'])
+    # build_image(["222221"])
+    # build_image(["222212"])
+    # build_image(['222122'])
+    
+    # print("=====================================")    
+    # build_image(["222221", "222210", '222102'])
+    # build_image(["222221"])
+    # build_image(["222210"])
+    # build_image(['222102'])
+    # exit()
     # image = load_images("data/images.npy")[5]
     # if image.max() != 0:
     #     image = image / image.max() * 255
@@ -438,14 +496,20 @@ if __name__ == "__main__":
     #     [0, 255]]
     # )
     print(image)
-    print(run_part1(image)[1])
+    #print(run_part1(image)[1])
 
     intensity_to_pixels = group_pixels_by_intensity(image)
     print(intensity_to_pixels)
     print(len(intensity_to_pixels))
     #test = [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000]
+
+    image = np.ones((SIZE, SIZE))* 120
+    image[:, 0] = 255
+    print(image)
     ice = process_image(image)
     print(ice)
+    # circuit from the paper to test
+    # ice = [[120.0, 56, '222210'], [120.0, 56, '222102'], [260.0, 8, '222000'], [120.0, 56, '222221']]
     circuit = encode_compress(image, ice)
     print(decode(simulator(circuit)))
     # print(minimize_expression(intensity_to_pixels[0.])) # True
