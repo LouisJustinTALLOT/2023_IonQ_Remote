@@ -56,8 +56,7 @@ def group_pixels_by_intensity(image: np.ndarray) -> dict:
         intensity = image[i]
         if intensity not in groups:
             groups[intensity] = []
-        groups[intensity].append("0b" + bin(i)[2:].zfill(NBITS_PX_IDX)) #.zfill(~) to pad with 0s TODO
-        # optimization, remove # format
+        groups[intensity].append("0b" + bin(i)[2:].zfill(NBITS_PX_IDX))
     return groups
 
 def minimize_expression(expressions: list) -> str:
@@ -66,30 +65,31 @@ def minimize_expression(expressions: list) -> str:
     For example:
     ['0b000000', '0b010000', '0b010000', '0b011000', '0b100000', '0b101000', '0b110000', '0b111000'] -> 0b000111
     """
-    # sens reading?
     def translate(expression: str) -> str:
         logic_expression = "("
         start_idx = 2
         for i in range(start_idx, len(expression)):
             logic_expression += ("" if expression[-(i-start_idx+1)] == "1" else "~") + "m_" + str(i-start_idx) + "&"
         logic_expression = logic_expression[:-1] + ")"
-        #print(expression, logic_expression)
-        #input()
         return logic_expression
+    
+    # convert the problem to a string
     problem = ""
     for expression in expressions:
         problem += translate(expression) + "|"
     problem = problem[:-1]
     print(problem)
+    
+    # simplify the problem
     simplified_problem = str(sy.to_dnf(problem, simplify=True, force=True))
     print("Simplified problem: ", simplified_problem)
+
+    # convert the simplified problem to a list of binary values
     simplified_expressions = []
     for expr in simplified_problem.split("|"):
         vars = expr.replace(" ", "").replace('(', '').replace(')', '').split("&")
         print(vars)
-        # idxs = [int(var.replace('~', "").replace(" ", "")[2:]) for var in vars]
-        # max_bit_idx = max(idxs)
-        b_val = "".ljust(NBITS_PX_IDX, '-')
+        b_val = "".ljust(NBITS_PX_IDX, '-') # - or 2 means everything/do not care/ 1 or 0
         for var in vars:
             var = var.replace(" ", "")
             print(var)
@@ -115,6 +115,7 @@ def process_image(image: np.ndarray) -> list:
         print(intensity)
         exprs = minimize_expression(pixels)
         tmp_exprs = []
+        # need for a loop because all expressions do not simplify as only one product
         for expr in exprs:
             tmp_exprs.append([intensity, len(pixels), expr.replace('-', '2')])
         #tmp_exprs = sorted(tmp_exprs, key=lambda x: x[2])
@@ -122,48 +123,9 @@ def process_image(image: np.ndarray) -> list:
     #intensity_count_expression = sorted(intensity_count_expression, key=lambda x: x[2])
     print("order", list(map(lambda x: x[2], intensity_count_expression)))
     # intensity_count_expression = sorted(intensity_count_expression, key=compare)
-    # TODO sort to avoid too many switchs
+    # TODO sort to avoid too many switchs ?
     print(intensity_count_expression)
     return intensity_count_expression
-
-
-def encode_bv(image: np.ndarray) -> qiskit.QuantumCircuit:
-    circuit = qiskit.QuantumCircuit(NB_QUBITS)
-
-    # Get the theta values for each pixel
-    image = image.flatten()
-    thetas = [pixel_value_to_theta(pixel) for pixel in image]
-    thetas += [0] * (NB_PX - NB_PX_IMG)
-
-    # Apply Hadamard gates for all qubits except the last one
-    for i in range(NB_QUBITS - 1):
-        circuit.h(i)
-    circuit.barrier()
-
-    ry_qbits = list(range(NB_QUBITS))
-
-    switches = [bin(0)[2:].zfill(NB_QUBITS)] + [
-        bin(i ^ (i - 1))[2:].zfill(NB_QUBITS) for i in range(1, NB_PX)
-    ]
-
-    # Apply the rotation gates
-    for i in range(NB_PX):
-        theta = thetas[i]
-
-        switch = switches[i]
-        # Apply x gate to the i-th qubit if the i-th bit of the switch is 1
-        for j in range(NB_QUBITS):
-            if switch[j] == "1":
-                circuit.x(j - 1)
-        # TODO: Is this a 2-qubit gate?? -> If not we have to reformulate using 2-qubit gates only (RYGate + CNOT)
-        # TODO: This method may be too slow: as such we have to compress the image by grouping pixels of the same intensity together
-        c3ry = RYGate(2 * theta).control(NB_QUBITS - 1)
-        circuit.append(c3ry, ry_qbits)
-
-        circuit.barrier()
-
-    circuit.measure_all()
-    return circuit
 
 def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
     circuit = qiskit.QuantumCircuit(NB_QUBITS)
@@ -190,12 +152,14 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
         bin(i ^ (i - 1))[2:].zfill(NB_QUBITS - 1) for i in range(1, NB_PX)
     ]
     print(switches)
+    # TODO remove switches which is not used anymore
 
     # Apply the rotation gates
     prev_switch = switches[0]
     for i in range(NB_PX):
         theta = thetas[i] # pixel_value_to_theta(intensity_count_expression[i][0])
         
+        # do not do zero rotation
         if theta != 0:
             switch = np.binary_repr(i, NB_QUBITS - 1)
             print(switch, prev_switch)
@@ -207,10 +171,11 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
                 # if switch[j] == "1":
                 #     circuit.x(j - 1)
             prev_switch = switch
-        # TODO: Not a 2-qubit gate: reformulate using 2-qubit gates only (RYGate + CNOT)
-        # Instead of 2 * theta, rotation is 2 * count * theta
-        # where count is stored in intensity_count_expression[1]
-        # where theta is result of pixel_value_to_theta(intensity_count_expression[0])
+
+            # TODO: Not a 2-qubit gate: reformulate using 2-qubit gates only (RYGate + CNOT)
+            # Instead of 2 * theta, rotation is 2 * count * theta
+            # where count is stored in intensity_count_expression[1]
+            # where theta is result of pixel_value_to_theta(intensity_count_expression[0])
             c3ry = RYGate(2 * theta).control(NB_QUBITS - 1) # intensity_count_expression[i][1] * 2 * theta
             # {m_0, ..., m_i} ==> {R_{m_0}, ..., R_{m_i}} -> R_{m_0}*i+1 
             circuit.append(c3ry, ry_qbits)
@@ -220,6 +185,7 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
             print(circuit)
             input()
 
+    # check all qbits are at 1 for the measurements
     for j in range(NB_QUBITS - 1):
         if prev_switch[j] != "1":
             circuit.x(j)
@@ -241,8 +207,6 @@ def encode_compress(image: np.ndarray, intensity_count_expression) -> qiskit.Qua
     for i in range(NB_QUBITS - 1):
         circuit.h(i)
     circuit.barrier()
-
-    ry_qbits = list(range(NB_QUBITS))
 
     # Switch is no longer relevant written this way: instead, we should apply the X gates according to
     # the result of process_image (see above)
@@ -273,10 +237,12 @@ def encode_compress(image: np.ndarray, intensity_count_expression) -> qiskit.Qua
             # do some inversion, be careful
             print("expr", bin_expr, prev_expr, (2**bin_expr.count('2')))
             input()
+            # switch to the right state, where 2 MEANS IT CAN BE EVERYTHING (1 or 0), because there will be no control on this qubit for this gate
             for j in range(NB_QUBITS - 1):
                 if (bin_expr[j] != "2") and (bin_expr[j] != prev_expr[j]):
                     circuit.x(j)
             
+            # control parameters for the RYGate
             ctrl_count = len(bin_expr) - bin_expr.count("2")
             qbits = [j for j in range(NB_QUBITS - 1) if bin_expr[j] != "2"] + [NB_QUBITS - 1]
 
@@ -287,7 +253,7 @@ def encode_compress(image: np.ndarray, intensity_count_expression) -> qiskit.Qua
             circuit.append(c3ry, qbits)
             print(circuit)
 
-            #prev_expr = bin_expr
+            # update prev_expr but saving the state (ignoring "2" values)
             new_prev_expr = ""
             for j in range(NB_QUBITS - 1):
                 if bin_expr[j] == "2":
@@ -403,6 +369,9 @@ def grading(dataset):
     return f * (0.999 ** gatecount)
 
 def build_image(repr_strs):
+    """
+    Function to test the simplified condition on an image, with "2" as a wildcard
+    """
     img = np.zeros((SIZE,SIZE))
     for i in range(SIZE):
         for j in range(SIZE):
@@ -451,7 +420,7 @@ if __name__ == "__main__":
     # plt.imshow(image, cmap='gray')
     # plt.show()
 
-
+    # # TESTS
     # example gray scale image 3x3
     image = np.array(
         [[0, 250, 0],
@@ -463,6 +432,8 @@ if __name__ == "__main__":
          [125, 125, 125],
          [250, 0, 250]]
     )
+
+    ### 2 TESTS
     # image = np.array(
     #     [[0, 255],
     #     [255, 0]]
