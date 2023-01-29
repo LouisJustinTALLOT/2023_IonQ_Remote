@@ -85,7 +85,7 @@ def minimize_expression(expressions: list) -> str:
     simplified_problem = str(sy.to_dnf(problem, simplify=True, force=True))
     print("Simplified problem: ", simplified_problem)
 
-    # convert the simplified problem to a list of binary values (PSB unclear to me)
+    # convert the simplified problem to a list of binary values
     simplified_expressions = []
     for expr in simplified_problem.split("|"):
         vars = expr.replace(" ", "").replace('(', '').replace(')', '').split("&")
@@ -408,8 +408,8 @@ def get_circuit():
 
 
 if __name__ == "__main__":
-    t = ['0b000000', '0b001000', '0b010000', '0b011000', '0b100000', '0b101000', '0b110000', '0b111000']
-    # t = ['0b000', '0b001']
+    # t = ['0b000000', '0b001000', '0b010000', '0b011000', '0b100000', '0b101000', '0b110000', '0b111000']
+    t = ['0b001', '0b100']
     expr = minimize_expression(t)
     print(expr)
 
