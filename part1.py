@@ -178,8 +178,9 @@ def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
             # Instead of 2 * theta, rotation is 2 * count * theta
             # where count is stored in intensity_count_expression[1]
             # where theta is result of pixel_value_to_theta(intensity_count_expression[0])
+            # When simplified expression, control is only on the number of qubits not equal to 2 or - (do not care)
             c3ry = RYGate(2 * theta).control(NB_QUBITS - 1) # intensity_count_expression[i][1] * 2 * theta
-            # {m_0, ..., m_i} ==> {R_{m_0}, ..., R_{m_i}} -> R_{m_0}*i+1 
+            # In this case, ry_qbits is the position of the qubits not equal to 2 or - (do not care)
             circuit.append(c3ry, ry_qbits)
 
             circuit.barrier()
