@@ -13,6 +13,7 @@ import math
 from pprint import pprint
 
 from typing import Dict, Union
+import sympy as sy
 
 from sklearn.metrics import mean_squared_error
 
@@ -23,6 +24,7 @@ NB_PX_IMG = SIZE ** 2
 
 # quantum parameters
 N = math.ceil(math.log2(SIZE))
+NBITS_PX_IDX = math.ceil(math.log2(NB_PX_IMG))
 NB_QUBITS = 2 * N + 1
 NB_PX = 2 ** (2 * N)
 
@@ -52,9 +54,9 @@ def group_pixels_by_intensity(image: np.ndarray) -> dict:
         intensity = image[i]
         if intensity not in groups:
             groups[intensity] = []
-        groups[intensity].append(bin(i)) #.zfill(~) to pad with 0s TODO
+        groups[intensity].append("0b" + bin(i)[2:].zfill(NBITS_PX_IDX)) #.zfill(~) to pad with 0s TODO
+        # optimization, remove # format
     return groups
-
 
 def minimize_expression(expressions: list) -> str:
     """
@@ -62,13 +64,32 @@ def minimize_expression(expressions: list) -> str:
     For example:
     ['0b000000', '0b010000', '0b010000', '0b011000', '0b100000', '0b101000', '0b110000', '0b111000'] -> 0b000111
     """
-    return expressions[0]
+    # sens reading?
+    def translate(expression: str) -> str:
+        logic_expression = "("
+        start_idx = 2
+        for i in range(start_idx, len(expression)):
+            logic_expression += ("" if expression[-(i-start_idx+1)] == "1" else "~") + "m_" + str(i-start_idx) + "&"
+        logic_expression = logic_expression[:-1] + ")"
+        #print(expression, logic_expression)
+        #input()
+        return logic_expression
+    problem = ""
+    for expression in expressions:
+        problem += translate(expression) + "|"
+    problem = problem[:-1]
+    print(problem)
+    simplified_problem = sy.to_dnf(problem, simplify=True, force=True)
+    print("Simplified problem: ", simplified_problem)
+    return simplified_problem
+    #return expressions
 
 
 def process_image(image: np.ndarray) -> list:
     intensity_to_pixels = group_pixels_by_intensity(image)
     intensity_count_expression = []
     for intensity, pixels in intensity_to_pixels.items():
+        print(intensity)
         intensity_count_expression.append([intensity, len(pixels), minimize_expression(pixels)])
 
 def encode(image: np.ndarray) -> qiskit.QuantumCircuit:
@@ -201,16 +222,18 @@ if __name__ == "__main__":
     # plt.imshow(image, cmap='gray')
     # plt.show()
 
-    plt.imshow(image, cmap='gray')
-    plt.show()
+    # plt.imshow(image, cmap='gray')
+    # plt.show()
 
     print(image)
 
     intensity_to_pixels = group_pixels_by_intensity(image)
     print(intensity_to_pixels)
     print(len(intensity_to_pixels))
-    test = [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000]
-    print(minimize_expression(test))
+    #test = [0b000000, 0b01000, 0b010000, 0b011000, 0b100000, 0b101000, 0b110000, 0b111000]
+    print(process_image(image))
+    # print(minimize_expression(intensity_to_pixels[0.])) # True
+    # print(minimize_expression(intensity_to_pixels[55.])) # Not a single expression
 
     #image = np.array([0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 120])
     # image = np.array([128]*16)
